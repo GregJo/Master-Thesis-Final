@@ -5,7 +5,7 @@
 #include "Scenes.h"
 #include <sutil.h>
 
-//#include "DebugHoelder.h"
+#include "DebugHoelder.h"
 
 class AdaptivePathTraceContext : public PathTraceRenderContext
 {

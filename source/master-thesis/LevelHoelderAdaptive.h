@@ -2,7 +2,7 @@
 #include <optix_device.h>
 
 #include "Buffers.h"
-//#include "HoelderDebugBuffers.h"
+#include "HoelderDebugBuffers.h"
 #include "AdaptiveUtil.h"
 
 using namespace optix;
@@ -50,7 +50,9 @@ static __device__ __inline__ float4 compute_level_color_depth_gradient(uint2 cur
 
 	float gradient_depth = 0.5f * gradient_depth_x + gradient_depth_y;
 
-	float4 combined_gradient = make_float4(gradient_color.x, gradient_color.y, gradient_color.z, gradient_depth);
+	//gradient_color = window_size_ * gradient_color;
+
+	float4 combined_gradient = /*50.0f * */make_float4(gradient_color.x, gradient_color.y, gradient_color.z, gradient_depth);
 
 	return combined_gradient;
 };
@@ -79,7 +81,7 @@ static __device__ float compute_level_window_hoelder(uint2 center, uint window_s
 
 #endif // DEBUG_HOELDER
 
-	for (size_t i = 0; i < 8; i++)
+	for (size_t i = 0; i < 12; i++)
 	{
 		int idx_x = 0;
 		int idx_y = 0;
@@ -126,6 +128,27 @@ static __device__ float compute_level_window_hoelder(uint2 center, uint window_s
 			idx_y = static_cast<int>(center.y) - static_cast<int>(window_size_) < 0 ? 0 : -1;
 		}
 
+		if (i == 8)
+		{
+			idx_x = 0;
+			idx_y = center.y + 2 * window_size_ > screen.y ? 0 : 2;
+		}
+		if (i == 9)
+		{
+			idx_x = 0;
+			idx_y = static_cast<int>(center.y) - 2 * static_cast<int>(window_size_) < 0 ? 0 : -2;
+		}
+		if (i == 10)
+		{
+			idx_x = static_cast<int>(center.x) - 2 * static_cast<int>(window_size_) < 0 ? 0 : -2;
+			idx_y = 0;
+		}
+		if (i == 11)
+		{
+			idx_x = center.x + 2 * window_size_ > screen.x ? 0 : 2;
+			idx_y = 0;
+		}
+
 		if (idx_x == 0 && idx_y == 0)
 		{
 			continue;
@@ -147,8 +170,12 @@ static __device__ float compute_level_window_hoelder(uint2 center, uint window_s
 
 		float neighbor_center_distance = (1.0f / static_cast<float>(window_size_)) * length(/*(1.0f / static_cast<float>(window_size_)) * */(make_float2(idx) - make_float2(center)));
 
-		float log_base = log(fabsf(neighbor_center_distance) + 1.0f);
-		log_base = log_base == 0 ? 1.0f : log_base;
+		//float c_base = 1.0f/(sqrtf(2.0f) + 0.1f);
+		//float c_base = 1.0f / (sqrtf(2.0f) + 0.5f);
+		float c_base = 1.0f / (2.0f * 100.1f);
+		//float c_base = 1.0f / (2.0f * window_size_);
+		float log_base = log(c_base * fabsf(neighbor_center_distance)/* + 1.0f*/)/**2.0f*/;
+		log_base = log_base == 0 ? /*1.0f*/-0.001f : log_base;
 
 		float3 neighbor_buffer_val = make_float3(output_buffer[idx].x, output_buffer[idx].y, output_buffer[idx].z);
 		neighborColorMean = length(neighbor_buffer_val);
@@ -158,19 +185,30 @@ static __device__ float compute_level_window_hoelder(uint2 center, uint window_s
 		// Where there is a very small depth/geometry gradient use smooth regime computation hoelder alpha, 
 		// else use non-smooth regime hoelder alpha computation (log_x value makes for that distinction).
 		// Smooth regime
-		float c = 20.0f;
-		if (fabsf(color_depth_gradient.w)/* Value 'w' is depth/geometry gradient */ <= 0.0025f/*0.025f*//* Currently more or less arbitary threshhold for an edge! */)
+		//float c = 10.0f;
+		float c = 3.0f;
+		//c = 1.0f;// / c;
+		if (fabsf(color_depth_gradient.w)/* Value 'w' is depth/geometry gradient */ <= 0.025f/**50.0f*//*0.025f*//* Currently more or less arbitary threshhold for an edge! */)
 		{
 			//hoelder_alpha_buffer[center] = make_float4(1000.0f, 0.0f, 1000.0f, 1.0f);
 			float3 color_gradient = make_float3(color_depth_gradient.x, color_depth_gradient.y, color_depth_gradient.z);
 			float mean_of_color_gradient = 1.f / 3.f * (color_gradient.x + color_gradient.y + color_gradient.z);
-			log_x = log(/*c hoelder constant, also try value 3 * */fabsf(c * (neighborColorMean - centerColorMean - mean_of_color_gradient * neighbor_center_distance)) + 1.0f);
+			log_x = log(/*c hoelder constant, also try value 3 * */fabsf(c * (neighborColorMean - centerColorMean - mean_of_color_gradient * neighbor_center_distance))/* + 1.0f*/);
 		}
 		// Non-smooth regime
 		else
 		{
 			log_x = log(/*c hoelder constant, also try value 3 * */fabsf(c * (neighborColorMean - centerColorMean)) + 1.0f);
+			//output_buffer[center] = make_float4(1000.0f,0.0f,1000.0f,1.0f);
 		}
+
+		//if (center.x == (screen.x / 2.0f))
+		//{
+		//	rtPrintf("log_x(device): %f, current i(device): %d\n", log_x, static_cast<int>(i));
+		//	//rtPrintf("log_base(device): %f, current i(device): %d\n", log_base, static_cast<int>(i));
+		//	//rtPrintf("log(base)(device): log(%f), current i(device): %d\n", (c_base * fabsf(neighbor_center_distance)), static_cast<int>(i));
+		//	//rtPrintf("log_x(device): %f, log_base(device): %f, log_x / log_base(device): %f, current center (device): [ %u , %u ], current i(device): %d\n", log_x, log_base, log_x / log_base, center.x, center.y, static_cast<int>(i));
+		//}
 
 		alpha = min(alpha, log_x / log_base);
 		alpha = clamp(alpha, 0.0f, 100.f);
@@ -202,9 +240,12 @@ static __device__ void hoelder_compute_current_level_samples_count(uint2 current
 			hoelder_refinement_buffer[current_launch_index] = make_float4(0);
 		}
 
+		float currentPixelLuminosity = 0.21f * output_buffer[current_launch_index].x + 0.72f * output_buffer[current_launch_index].y + 0.07f * output_buffer[current_launch_index].z;
+
+
 #ifdef DEBUG_HOELDER
-		hoelder_alpha_buffer[current_window_center] = make_float4(hoelder_alpha * 1.0f);
-		hoelder_alpha_buffer[current_launch_index] = make_float4(hoelder_alpha * 1.0f);
+		hoelder_alpha_buffer[current_window_center] = make_float4(hoelder_alpha * 1.0f);// -0.5f*(1.0f - currentPixelLuminosity));
+		hoelder_alpha_buffer[current_launch_index] = make_float4(hoelder_alpha * 1.0f);// -0.5f*(1.0f - currentPixelLuminosity));
 		//hoelder_alpha_buffer[current_window_center] = make_float4(1.0f - hoelder_alpha * 1000.0f);
 		//hoelder_alpha_buffer[current_launch_index] = make_float4(1.0f - hoelder_alpha * 1000.0f);
 #endif //DEBUG_HOELDER
@@ -217,9 +258,9 @@ static __device__ void hoelder_compute_current_level_samples_count(uint2 current
 		//hoelder_alpha_buffer[current_launch_index] = make_float4(1.0 - hoelder_alpha * 1.0f);
 
 		// Luminosity conversion: 0.21 R + 0.72 G + 0.07 B
-		float currentPixelLuminosity = 0.21f * output_buffer[current_launch_index].x + 0.72f * output_buffer[current_launch_index].y + 0.07f * output_buffer[current_launch_index].z;
+		//float currentPixelLuminosity = 0.21f * output_buffer[current_launch_index].x + 0.72f * output_buffer[current_launch_index].y + 0.07f * output_buffer[current_launch_index].z;
 
-		if (/*hoelder_alpha * 1.0f*/hoelder_alpha * 1.0f/* * currentPixelLuminosity*/ < hoelder_alpha_no_refinement_threshhold)// && currentPixelLuminosity > 0.0f)// * currentPixelLuminosity)
+		if (/*hoelder_alpha * 1.0f*/hoelder_alpha * 1.0f/* * (1.0f - currentPixelLuminosity)*/ < hoelder_alpha_no_refinement_threshhold)// && currentPixelLuminosity > 0.0f)// * currentPixelLuminosity)
 		{
 			hoelder_refinement_buffer[current_window_center] = make_float4(1);
 			hoelder_refinement_buffer[current_launch_index] = make_float4(1);

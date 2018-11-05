@@ -3,7 +3,7 @@
 #include "optixPathTracer.h"
 #include "../sutil/sampleConfig.h"
 
-uint maxAdaptiveLevel = 11;
+uint maxAdaptiveLevel = 10;
 
 Scene BMW6SceneSetupAndGet() 
 {
@@ -101,6 +101,7 @@ Scene KilleroosSceneSetupAndGet()
 	light.v2 = make_float3(0.0f, 0.0f, 30.0f) * killeroos.scale;
 	light.normal = -normalize(cross(light.v1, light.v2));
 	light.emission = make_float3(200.0f, 200.0f, 200.0f);
+	//light.emission = make_float3(150.0f, 150.0f, 150.0f);
 
 	killeroos.parallelogram_lights.push_back(light);
 

@@ -83,7 +83,7 @@ void setupMitchellFilter(Context context, float2 radius, int sqrt_num_samples)//
 {
 	int expected_samples_count = sqrt_num_samples * sqrt_num_samples;//num_samples;// 5;
 
-	int filterTableResolution = 8;
+	int filterTableResolution = 16;
 	MitchellFilter mitchellFilter(radius, filterTableResolution, 0.5f);
 	mitchellFilter.fillFilterTable();
 
