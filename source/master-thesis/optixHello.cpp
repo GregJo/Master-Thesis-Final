@@ -62,6 +62,9 @@
 
 #include "Scenes.h"
 
+#include "TestHoelder.h"
+
+
 using namespace optix;
 
 const char* const SAMPLE_NAME = "master-thesis";
@@ -357,7 +360,30 @@ void glutDisplay()
 	camera->update(frame_number);
 	
 	updateCurrentLevelAdaptiveVariables(context, camera->getChanged());
+
+#ifdef TEST_HOELDER
+	if (camera->getChanged())
+	{
+		currentTotalTimeElapsed = 0.0f;
+		equalTimeComparisonDone = 0;
+	}
+
+	if (EQUAL_TIME_COMPARISON_ACTIVE && !equalTimeComparisonDone)
+	{
+		auto start = std::chrono::high_resolution_clock::now();
+		context->launch(0, width, height);
+		auto end = std::chrono::high_resolution_clock::now();
+
+		// Convert from ms to s and add to total elapsed time.
+		currentTotalTimeElapsed +=  0.001 * (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+	}
+	if (EQUAL_QUANTITY_COMPARISON_ACTIVE && !equalQuantityComparisonDone)
+	{
+		context->launch(0, width, height);
+	}
+#else
 	context->launch(0, width, height);
+#endif // TEST_HOELDER
 
 	//sutil::displayBufferGL(getOutputDepthBuffer());
 	//sutil::displayBufferGL(getDepthGradientBuffer());
@@ -376,6 +402,32 @@ void glutDisplay()
 
 	//initial_render_run = false;
 
+#ifdef TEST_HOELDER
+	if (EQUAL_TIME_COMPARISON_ACTIVE && !equalTimeComparisonDone)
+	{
+		if (currentTotalTimeElapsed >= TIME_IN_SECONDS)
+		{
+			const std::string outputImage = std::string(SAMPLE_NAME) + "_time_" + std::to_string(currentTotalTimeElapsed) + ".ppm";
+			std::cerr << "Saving current frame to '" << outputImage << "'\n";
+			sutil::displayBufferPPM(outputImage.c_str(), getOutputBuffer(), false);
+
+			equalTimeComparisonDone = 1;
+		}
+	}
+	if (EQUAL_QUANTITY_COMPARISON_ACTIVE && !equalQuantityComparisonDone)
+	{
+		if (currentTotalSampleCount == SAMPLE_PER_PIXEL_QUANTITY)
+		{
+			const std::string outputImage = std::string(SAMPLE_NAME) + "_samples_" + std::to_string(currentTotalSampleCount) + ".ppm";
+			std::cerr << "Saving current frame to '" << outputImage << "'\n";
+			sutil::displayBufferPPM(outputImage.c_str(), getOutputBuffer(), false);
+
+			equalQuantityComparisonDone = 1;
+		}
+	}
+#endif // TEST_HOELDER
+
+
 	glutSwapBuffers();
 }
 
@@ -392,7 +444,7 @@ void glutKeyboardPress(unsigned char k, int x, int y)
 	}
 	case('s'):
 	{
-		const std::string outputImage = std::string(SAMPLE_NAME) + ".ppm";
+		const std::string outputImage = std::string(SAMPLE_NAME) + "_" + std::to_string(frame_number) + ".ppm";
 		std::cerr << "Saving current frame to '" << outputImage << "'\n";
 		sutil::displayBufferPPM(outputImage.c_str(), getOutputBuffer(), false);
 		break;

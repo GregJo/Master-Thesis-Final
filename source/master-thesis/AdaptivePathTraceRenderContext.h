@@ -6,6 +6,7 @@
 #include <sutil.h>
 
 #include "DebugHoelder.h"
+#include "TestHoelder.h"
 
 class AdaptivePathTraceContext : public PathTraceRenderContext
 {
@@ -124,11 +125,10 @@ private:
 	}
 };
 
-
 uint firstAdaptiveLevel = 6;
 uint adaptiveLevels = maxAdaptiveLevel - firstAdaptiveLevel;
 
-CommandList commandListAdaptive;
+//CommandList commandListAdaptive;
 
 // Variance based adaptive sampling specific
 const uint windowSize = std::powf(2, adaptiveLevels);						// Powers of two are your friend.
@@ -153,13 +153,19 @@ int nextLevelBegin = 0;
 void resetAdaptiveLevelVariables()
 {
 	currentLevelAdaptiveSampleCount = std::powf(2, firstAdaptiveLevel);
-	currentFrameSampleCount = 0;
+	//currentFrameSampleCount = 0;
 	currentFrameSampleCount = min(currentLevelAdaptiveSampleCount, maxAdditionalRaysPerRenderRun);
 	currentAdaptiveLevel = firstAdaptiveLevel;
 	currentLevelWindowSize = initialLevelWindowSize;
 	waitFramesNumber = currentLevelAdaptiveSampleCount / maxAdditionalRaysPerRenderRun;
 
 	nextLevelBegin = 0;
+
+#ifdef TEST_HOELDER
+	currentTotalSampleCount = 0;
+	equalQuantityComparisonDone = 0;
+#endif // TEST_HOELDER
+
 }
 
 void setCurrentLevelWindowSize(Context context)
@@ -207,6 +213,14 @@ void updateCurrentLevelAdaptiveVariables(Context context, bool cameraChanged)
 
 	currentFrameSampleCount = 0;
 	nextLevelBegin = 0;
+
+#ifdef TEST_HOELDER
+	if (EQUAL_QUANTITY_COMPARISON_ACTIVE && !equalQuantityComparisonDone)
+	{
+		currentTotalSampleCount += maxAdditionalRaysPerRenderRun;
+	}
+#endif // TEST_HOELDER
+
 }
 
 int getInitialRenderNumSamples()
