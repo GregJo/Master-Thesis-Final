@@ -35,6 +35,9 @@
 #include "LevelHoelderAdaptive.h"
 #include "MitchellFilterDevice.h"
 
+#include "BasicPathTracing.h"
+//#include "TestHoelder.h"
+
 using namespace optix;
 
 struct PerRayData_pathtrace
@@ -274,6 +277,17 @@ RT_PROGRAM void pathtrace_camera()
 			float2 sample_position = make_float2(current_window_centre.x + jitter.x, current_window_centre.y + jitter.y);
 			int current_total_rays = output_current_total_rays_buffer[current_window_centre].x;
 			computeLevelMitchellFilterSampleContributionInNeighborhood(current_level_window_size, sample_position, current_window_centre, prd.result, screen, current_total_rays, &output_filter_sum_buffer, &output_filter_x_sample_sum_buffer);
+#ifdef DEBUG_HOELDER
+			total_sample_count_buffer[launch_index].x++;
+
+			//atomicExch(&total_sample_count_buffer[launch_index], static_cast<uint>(total_sample_count_buffer[launch_index]+1));
+
+			if (launch_index.x == 511 && launch_index.y == 511)
+			{
+				rtPrintf("Total sample count at index [ %u , %u ]: %u\n", launch_index.x, launch_index.y, total_sample_count_buffer[launch_index].x);
+			}
+#endif // DEBUG_HOELDER
+
 		} while (--samples_per_pixel);
 
 
@@ -284,6 +298,119 @@ RT_PROGRAM void pathtrace_camera()
 	}
 	fill_buffers();
 }
+
+#ifdef BASIC_PATH_TRACING
+
+//rtDeclareVariable(unsigned int, sqrt_num_samples, , );
+
+RT_PROGRAM void basic_pathtrace_camera()
+{
+	size_t2 screen = output_buffer.size();
+
+	float2 inv_screen = 1.0f / make_float2(screen) * 2.f;
+	float2 pixel = (make_float2(launch_index)) * inv_screen - 1.f;
+
+	//float2 jitter_scale = inv_screen / sqrt_num_samples;
+	//unsigned int samples_per_pixel = sqrt_num_samples*sqrt_num_samples;
+
+	unsigned int samples_per_pixel = num_samples;//min(num_samples, max_per_frame_samples_budget);
+	float3 result = make_float3(0.0f);
+
+	unsigned int current_sqrt_num_samples = static_cast<unsigned int>(sqrtf(static_cast<float>(samples_per_pixel)));
+
+	if (!current_sqrt_num_samples)
+	{
+		++current_sqrt_num_samples;
+	}
+
+	float2 jitter_scale = inv_screen / current_sqrt_num_samples;
+
+	unsigned int seed = tea<16>(screen.x*launch_index.y + launch_index.x, frame_number);
+	do
+	{
+		//
+		// Sample pixel using jittering
+		//
+		//unsigned int x = samples_per_pixel%sqrt_num_samples;
+		//unsigned int y = samples_per_pixel / sqrt_num_samples;
+		unsigned int x = samples_per_pixel % current_sqrt_num_samples;
+		unsigned int y = samples_per_pixel / current_sqrt_num_samples;
+		float2 jitter = make_float2(x - rnd(seed), y - rnd(seed));
+		float2 d = pixel + jitter*jitter_scale;
+		float3 ray_origin = eye;
+		float3 ray_direction = normalize(d.x*U + d.y*V + W);
+
+		// Initialze per-ray data
+		PerRayData_pathtrace prd;
+		prd.result = make_float3(0.f);
+		prd.attenuation = make_float3(1.f);
+		prd.countEmitted = true;
+		prd.done = false;
+		prd.seed = seed;
+		prd.depth = 0;
+
+		// Each iteration is a segment of the ray path.  The closest hit will
+		// return new segments to be traced here.
+		for (;;)
+		{
+			Ray ray = make_Ray(ray_origin, ray_direction, pathtrace_ray_type, scene_epsilon, RT_DEFAULT_MAX);
+			rtTrace(top_object, ray, prd);
+
+			if (prd.done)
+			{
+				// We have hit the background or a luminaire
+				prd.result += prd.radiance * prd.attenuation;
+				break;
+			}
+
+			// Russian roulette termination 
+			if (prd.depth >= rr_begin_depth)
+			{
+				float pcont = fmaxf(prd.attenuation);
+				if (rnd(prd.seed) >= pcont)
+					break;
+				prd.attenuation /= pcont;
+			}
+
+			prd.depth++;
+			prd.result += prd.radiance * prd.attenuation;
+
+			// Update ray data for the next path segment
+			ray_origin = prd.origin;
+			ray_direction = prd.direction;
+		}
+
+		result += prd.result;
+		seed = prd.seed;
+#ifdef DEBUG_HOELDER
+		total_sample_count_buffer[launch_index].x++;
+		//atomicExch(&total_sample_count_buffer[make_uint2(0)], static_cast<uint>(total_sample_count_buffer[make_uint2(0)] + 1));
+		if (launch_index.x == 0 && launch_index.y == 0)
+		{
+			rtPrintf("Total sample count at index [ %u , %u ]: %u\n", launch_index.x, launch_index.y, total_sample_count_buffer[launch_index].x);
+		}
+#endif // DEBUG_HOELDER
+	} while (--samples_per_pixel);
+
+	//
+	// Update the output buffer
+	//
+	//float3 pixel_color = result / (sqrt_num_samples*sqrt_num_samples);
+	float3 pixel_color = result / num_samples;
+
+	if (frame_number > 1)
+	{
+		float a = 1.0f / (float)frame_number;
+		float3 old_color = make_float3(output_buffer[launch_index]);
+		output_buffer[launch_index] = make_float4(lerp(old_color, pixel_color, a), 1.0f);
+	}
+	else
+	{
+		output_buffer[launch_index] = make_float4(pixel_color, 1.0f);
+	}
+}
+
+#endif // BASIC_PATH_TRACING
 
 //-----------------------------------------------------------------------------
 //

@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2017 NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////
 
 #ifdef __APPLE__
 #  include <GLUT/glut.h>
@@ -64,6 +64,9 @@
 
 #include "TestHoelder.h"
 
+#ifdef TEST_HOELDER
+#include <chrono>
+#endif // TEST_HOELDER
 
 using namespace optix;
 
@@ -83,7 +86,12 @@ bool           use_pbo = true;
 
 int            frame_number = 1;
 int            sqrt_num_samples = sqrt(currentLevelAdaptiveSampleCount);
-int            num_samples = getInitialRenderNumSamples();
+#ifdef BASIC_PATH_TRACING
+int	num_samples = maxAdditionalRaysPerRenderRun;
+#else
+int num_samples = getInitialRenderNumSamples();
+#endif // BASIC_PATH_TRACING
+
 int            rr_begin_depth = 1;
 Program        pgram_intersection = 0;
 Program        pgram_bounding_box = 0;
@@ -127,7 +135,7 @@ Buffer getOutputBuffer()
 	return context["output_buffer"]->getBuffer();
 }
 
-Buffer getPerWindowVarianceBuffer() 
+Buffer getPerWindowVarianceBuffer()
 {
 	return context["per_window_variance_buffer_input"]->getBuffer();
 }
@@ -142,7 +150,7 @@ Buffer getPerRayWindowSizeBuffer()
 	return context["window_size_buffer"]->getBuffer();
 }
 
-Buffer getOutputDepthBuffer() 
+Buffer getOutputDepthBuffer()
 {
 	return context["output_scene_depth_buffer"]->getBuffer();
 }
@@ -160,7 +168,7 @@ Buffer getHoelderAlphaBuffer()
 }
 
 // Debug
-Buffer getHoelderAdaptiveSceneDepthBuffer() 
+Buffer getHoelderAdaptiveSceneDepthBuffer()
 {
 	return context["hoelder_adaptive_scene_depth_buffer"]->getBuffer();
 }
@@ -270,10 +278,10 @@ void loadComplexGeometry(Context context, const Scene scene)
 	mesh.context = context;
 
 	Matrix4x4 scale_matrix;
-	scale_matrix.setRow(0, make_float4(scene.scale.x, 0.0f,			 0.0f,		    0.0f));
-	scale_matrix.setRow(1, make_float4(0.0f,		  scene.scale.y, 0.0f,		    0.0f));
-	scale_matrix.setRow(2, make_float4(0.0f,		  0.0f,			 scene.scale.z, 0.0f));
-	scale_matrix.setRow(3, make_float4(0.0f,		  0.0f,			 0.0f,		    1.0f));
+	scale_matrix.setRow(0, make_float4(scene.scale.x, 0.0f, 0.0f, 0.0f));
+	scale_matrix.setRow(1, make_float4(0.0f, scene.scale.y, 0.0f, 0.0f));
+	scale_matrix.setRow(2, make_float4(0.0f, 0.0f, scene.scale.z, 0.0f));
+	scale_matrix.setRow(3, make_float4(0.0f, 0.0f, 0.0f, 1.0f));
 
 	loadMesh(scene.file_name, mesh, scale_matrix);
 
@@ -303,7 +311,7 @@ void loadComplexGeometry(Context context, const Scene scene)
 	light_buffer->unmap();
 	context["lights"]->setBuffer(light_buffer);
 
-	GeometryInstance light_parallelogram = createParallelogram(context, 
+	GeometryInstance light_parallelogram = createParallelogram(context,
 		light.corner,
 		light.v1,
 		light.v2);
@@ -358,15 +366,55 @@ void glutRun()
 void glutDisplay()
 {
 	camera->update(frame_number);
-	
+
 	updateCurrentLevelAdaptiveVariables(context, camera->getChanged());
+
+	if (adaptiveRenderingDone)
+	{
+		int totalSampleSum = 0;
+
+		void* data;
+		rtBufferMap(getTotalSampleCountBuffer()->get(), &data);
+
+		uint4* total_sample_count_data = (uint4*)data;
+		uint total_sample_count_sum = 0;
+		for (int i = 0; i < width*width; ++i) {
+			total_sample_count_sum += total_sample_count_data[i].x;
+			//printf("Done!!!: %f\n", total_sample_count_data[0].x);
+		}
+		rtBufferUnmap(getTotalSampleCountBuffer()->get());
+
+		printf("Final total sample count: %u\n", total_sample_count_sum);
+	}
+
+#ifdef TEST_HOELDER
+
+	if (equalTimeComparisonDone || equalQuantityComparisonDone)
+	{
+		int totalSampleSum = 0;
+
+		void* data;
+		rtBufferMap(getTotalSampleCountBuffer()->get(), &data);
+
+		uint4* total_sample_count_data = (uint4*)data;
+		uint total_sample_count_sum = 0;
+		for (int i = 0; i < width*width; ++i) {
+			total_sample_count_sum += total_sample_count_data[i].x;
+			//printf("Done!!!: %f\n", total_sample_count_data[0].x);
+		}
+		rtBufferUnmap(getTotalSampleCountBuffer()->get());
+
+		printf("Final total sample count: %u\n", total_sample_count_sum);
+	}
+
+#endif //TEST_HOELDER
 
 #ifdef TEST_HOELDER
 	if (camera->getChanged())
 	{
 		currentTotalTimeElapsed = 0.0f;
 		equalTimeComparisonDone = 0;
-	}
+}
 
 	if (EQUAL_TIME_COMPARISON_ACTIVE && !equalTimeComparisonDone)
 	{
@@ -375,7 +423,7 @@ void glutDisplay()
 		auto end = std::chrono::high_resolution_clock::now();
 
 		// Convert from ms to s and add to total elapsed time.
-		currentTotalTimeElapsed +=  0.001 * (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+		currentTotalTimeElapsed += 0.001 * (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 	}
 	if (EQUAL_QUANTITY_COMPARISON_ACTIVE && !equalQuantityComparisonDone)
 	{
@@ -512,7 +560,7 @@ void glutResize(int w, int h)
 	glutPostRedisplay();
 }
 
-void printUsageAndExit( const char* argv0 );
+void printUsageAndExit(const char* argv0);
 
 struct UsageReportLogger
 {
@@ -536,7 +584,7 @@ int main(int argc, char* argv[])
 {
 	std::string out_file;
 	std::string mesh_file = std::string(sutil::samplesDir()) + "/data/cow.obj";
-	for (int i = 1; i<argc; ++i)
+	for (int i = 1; i < argc; ++i)
 	{
 		const std::string arg(argv[i]);
 
@@ -575,7 +623,7 @@ int main(int argc, char* argv[])
 
 	AdaptivePathTraceContext* adaptive_PT_context = new AdaptivePathTraceContext();
 
-    try { 
+	try {
 		Scene scene = KilleroosSceneSetupAndGet();
 
 		width = scene.width;
@@ -628,17 +676,17 @@ int main(int argc, char* argv[])
 		}
 
 		delete adaptive_PT_context;
-        return( 0 );
+		return(0);
 
-    } SUTIL_CATCH( adaptive_PT_context->getContext()->getContext()->get() )
+	} SUTIL_CATCH(adaptive_PT_context->getContext()->getContext()->get())
 }
 
 
-void printUsageAndExit( const char* argv0 )
+void printUsageAndExit(const char* argv0)
 {
-  fprintf( stderr, "Usage  : %s [options]\n", argv0 );
-  fprintf( stderr, "Options: --file | -f <filename>      Specify file for image output\n" );
-  fprintf( stderr, "         --help | -h                 Print this usage message\n" );
-  fprintf( stderr, "         --dim=<width>x<height>      Set image dimensions; defaults to 512x384\n" );
-  exit(1);
+	fprintf(stderr, "Usage  : %s [options]\n", argv0);
+	fprintf(stderr, "Options: --file | -f <filename>      Specify file for image output\n");
+	fprintf(stderr, "         --help | -h                 Print this usage message\n");
+	fprintf(stderr, "         --dim=<width>x<height>      Set image dimensions; defaults to 512x384\n");
+	exit(1);
 }

@@ -3,6 +3,7 @@
 
 #include "Buffers.h"
 #include "HoelderDebugBuffers.h"
+//#include "TestHoelder.h"
 #include "AdaptiveUtil.h"
 
 using namespace optix;

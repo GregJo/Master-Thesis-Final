@@ -3,7 +3,7 @@
 #include "optixPathTracer.h"
 #include "../sutil/sampleConfig.h"
 
-uint maxAdaptiveLevel = 10;
+uint maxAdaptiveLevel = 9;
 
 Scene BMW6SceneSetupAndGet() 
 {

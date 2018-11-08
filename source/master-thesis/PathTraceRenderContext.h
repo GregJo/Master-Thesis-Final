@@ -16,6 +16,9 @@
 #include "TrackballCamera.h"
 #include <sutil.h>
 
+//#include "BasicPathTracing.h"
+#include "TestHoelder.h"
+
 class PathTraceRenderContext : public IOptixRenderContext
 {
 
@@ -70,6 +73,10 @@ public:
 		_context->setRayGenerationProgram(0, _context->createProgramFromPTXString(ptx, "pathtrace_camera"));
 		_context->setExceptionProgram(0, _context->createProgramFromPTXString(ptx, "exception"));
 		_context->setMissProgram(0, _context->createProgramFromPTXString(ptx, "miss"));
+
+#ifdef BASIC_PATH_TRACING
+		_context->setRayGenerationProgram(0, _context->createProgramFromPTXString(ptx, "basic_pathtrace_camera"));
+#endif // BASIc_PATH_TRACING
 
 		// Post processing
 		Buffer output_scene_depth_buffer = sutil::createOutputBuffer(_context, RT_FORMAT_FLOAT4, _width, _height, use_pbo);

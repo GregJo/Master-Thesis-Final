@@ -51,6 +51,7 @@ set(sources
     IOptixRenderContext.h
     PathTraceRenderContext.h
     RayTraceRenderContext.h
+    TestHoelder.h
     optixPathTracer.cu
     adaptiveOptixPathTracer.cu
     parallelogram.cu

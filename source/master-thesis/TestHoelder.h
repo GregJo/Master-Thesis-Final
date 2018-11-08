@@ -1,15 +1,15 @@
 #ifndef TEST_HOELDER
 
 #define TEST_HOELDER
-#include <chrono>
+//#include <chrono>
 
 const int USE_HOELDER_ADAPTIVE = 1;
 
 const int KILLEROO_SCENE = 0;
 const int BARCELONA_PAVILLON_SCENE = 0;
 
-const int EQUAL_TIME_COMPARISON_ACTIVE = 1;
-const int EQUAL_QUANTITY_COMPARISON_ACTIVE = 0;
+const int EQUAL_TIME_COMPARISON_ACTIVE = 0;
+const int EQUAL_QUANTITY_COMPARISON_ACTIVE = 1;
 
 // variables to modify
 int equalTimeComparisonDone = 0;
@@ -23,3 +23,19 @@ unsigned int currentTotalSampleCount = 0;
 float currentTotalTimeElapsed = 0.0f;
 
 #endif // !DEBUG_HOELDER
+
+/////////////////////////////////////////////////////////////////////////////
+
+#ifndef DEBUG_HOELDER
+
+#define DEBUG_HOELDER
+
+#endif // !DEBUG_HOELDER
+
+/////////////////////////////////////////////////////////////////////////////
+
+#ifndef BASIC_PATH_TRACING
+
+#define BASIC_PATH_TRACING
+
+#endif // !BASIC_PATH_TRACING

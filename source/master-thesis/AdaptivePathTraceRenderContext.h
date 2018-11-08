@@ -5,7 +5,7 @@
 #include "Scenes.h"
 #include <sutil.h>
 
-#include "DebugHoelder.h"
+//#include "DebugHoelder.h"
 #include "TestHoelder.h"
 
 class AdaptivePathTraceContext : public PathTraceRenderContext
@@ -37,6 +37,9 @@ public:
 		// This buffer is for debug
 		//Buffer total_sample_count_buffer = sutil::createOutputBuffer(_context, RT_FORMAT_FLOAT4, _width, _height, use_pbo);
 		//_context["total_sample_count_buffer"]->set(total_sample_count_buffer);
+
+		Buffer total_sample_count_buffer = sutil::createOutputBuffer(_context, RT_FORMAT_UNSIGNED_INT4, _width, _height, use_pbo);
+		_context["total_sample_count_buffer"]->set(total_sample_count_buffer);
 
 #endif // DEBUG_HOELDER
 
@@ -150,6 +153,8 @@ uint waitFramesNumber = currentLevelAdaptiveSampleCount / maxAdditionalRaysPerRe
 
 int nextLevelBegin = 0;
 
+int adaptiveRenderingDone = 0;
+
 void resetAdaptiveLevelVariables()
 {
 	currentLevelAdaptiveSampleCount = std::powf(2, firstAdaptiveLevel);
@@ -160,6 +165,8 @@ void resetAdaptiveLevelVariables()
 	waitFramesNumber = currentLevelAdaptiveSampleCount / maxAdditionalRaysPerRenderRun;
 
 	nextLevelBegin = 0;
+
+	adaptiveRenderingDone = 0;
 
 #ifdef TEST_HOELDER
 	currentTotalSampleCount = 0;
@@ -213,6 +220,11 @@ void updateCurrentLevelAdaptiveVariables(Context context, bool cameraChanged)
 
 	currentFrameSampleCount = 0;
 	nextLevelBegin = 0;
+
+	if (currentAdaptiveLevel == maxAdaptiveLevel && currentLevelAdaptiveSampleCount <= 0)
+	{
+		adaptiveRenderingDone = 1;
+	}
 
 #ifdef TEST_HOELDER
 	if (EQUAL_QUANTITY_COMPARISON_ACTIVE && !equalQuantityComparisonDone)
